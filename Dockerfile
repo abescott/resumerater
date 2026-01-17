@@ -10,6 +10,9 @@ COPY tsconfig.json ./
 COPY src ./src
 
 RUN npm run build
+RUN echo "⬇️ DEBUG: Listing dist contents"
+RUN ls -R dist
+RUN echo "⬆️ DEBUG: End Listing"
 
 # Production stage
 FROM node:18-alpine
@@ -20,6 +23,8 @@ COPY package*.json ./
 RUN npm install --only=production
 
 COPY --from=builder /app/dist ./dist
+RUN echo "⬇️ DEBUG: Final Image Dist"
+RUN ls -R dist
 
 # Create a non-root user
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
