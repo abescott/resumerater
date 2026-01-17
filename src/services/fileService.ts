@@ -1,5 +1,6 @@
 import axios from 'axios';
 const pdf = require('pdf-parse');
+import mammoth from 'mammoth';
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -39,6 +40,16 @@ export const extractTextFromPdf = async (buffer: Buffer): Promise<string> => {
         return data.text;
     } catch (error) {
         console.error('Error parsing PDF:', error);
+        return '';
+    }
+};
+
+export const extractTextFromDocx = async (buffer: Buffer): Promise<string> => {
+    try {
+        const result = await mammoth.extractRawText({ buffer });
+        return result.value;
+    } catch (error) {
+        console.error('Error parsing DOCX:', error);
         return '';
     }
 };
