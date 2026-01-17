@@ -132,8 +132,12 @@ const JobApplicants: React.FC = () => {
                     </thead>
                     <tbody>
                         {sortedApplicants.map((app) => {
-                            // Convert 1-10 scale to 1-5 scale
-                            const ratingOutOf5 = app.aiRating ? Math.round(app.aiRating / 2) : null;
+                            // Handle legacy 1-10 scale if detected (rating > 5)
+                            // otherwise assume 1-5 scale (native)
+                            let ratingOutOf5 = app.aiRating || null;
+                            if (ratingOutOf5 && ratingOutOf5 > 5) {
+                                ratingOutOf5 = Math.round(ratingOutOf5 / 2);
+                            }
 
                             let ratingColor = '#d1d5db'; // gray default
                             if (ratingOutOf5) {
