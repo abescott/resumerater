@@ -17,7 +17,7 @@ const syncData = async () => {
                 { bambooId: job.id },
                 {
                     bambooId: job.id,
-                    title: job.jobOpeningName,
+                    title: job.title?.label || 'Untitled Job',
                     department: job.department?.label || (typeof job.department === 'string' ? job.department : 'Unknown'),
                     location: job.location?.label || (job.location?.address ? [job.location.address.city, job.location.address.state].filter(Boolean).join(', ') : 'Unknown'),
                     division: job.division?.label || (typeof job.division === 'string' ? job.division : 'Unknown'),

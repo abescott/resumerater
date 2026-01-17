@@ -30,10 +30,42 @@ export const getJobs = async () => {
 
 export const getApplications = async () => {
     try {
-        // Note: This endpoint usually supports pagination or filters. 
-        // Fetching all for now.
-        const response = await axios.get(`${BASE_URL}/applications`, { headers: authHeader });
-        return response.data;
+        let allApplications: any[] = [];
+        let nextPageUrl = `${BASE_URL}/applications`;
+
+        console.log('Fetching applications pages...');
+
+        while (nextPageUrl) {
+            console.log(`Fetching page: ${nextPageUrl}`);
+
+            let urlToFetch = nextPageUrl;
+            if (!nextPageUrl.startsWith('http')) {
+                // The API returns a relative path like /v1/applicant_tracking/applications?page=2
+                // We need to prepend the gateway domain and company domain
+                // BASE_URL is https://api.bamboohr.com/api/gateway.php/${DOMAIN}/v1/applicant_tracking
+                // We want https://api.bamboohr.com/api/gateway.php/${DOMAIN} + nextPageUrl
+
+                const apiRoot = `https://api.bamboohr.com/api/gateway.php/${DOMAIN}`;
+                urlToFetch = `${apiRoot}${nextPageUrl}`;
+            }
+
+            const response = await axios.get(urlToFetch, { headers: authHeader });
+            const data = response.data;
+
+            if (data.applications) {
+                allApplications = allApplications.concat(data.applications);
+            }
+
+            // API returns nextPageUrl as null when done, or a string URL for next page
+            nextPageUrl = data.nextPageUrl; // Check if this matches actual API response key
+
+            if (!data.paginationComplete && !nextPageUrl) {
+                // Break to avoid infinite loop if API behaves unexpectedly
+                break;
+            }
+        }
+
+        return { applications: allApplications };
     } catch (error) {
         console.error('Error fetching applications:', error);
         throw error;
@@ -65,40 +97,4 @@ export const getJobDetails = async (jobId: number) => {
     }
 };
 
-const cheerio = require('cheerio');
 
-export const scrapeJobDescription = async (jobId: number): Promise<string | null> => {
-    try {
-        const domain = process.env.BAMBOOHR_COMPANY_DOMAIN;
-        // The internal API endpoint used by the SPA
-        const url = `https://${domain}.bamboohr.com/careers/${jobId}/detail`;
-        console.log(`Scraping URL (API): ${url}`);
-
-        // Headers are important to get JSON
-        const response = await axios.get(url, {
-            headers: {
-                'Accept': 'application/json'
-            }
-        });
-
-        const data = response.data;
-
-        // Access nested description
-        // Path: result.jobOpening.description
-        let descriptionHtml = data?.result?.jobOpening?.description;
-
-        if (!descriptionHtml) {
-            console.log(`No description found in keys: ${Object.keys(data?.result?.jobOpening || {})}`);
-            return null;
-        }
-
-        // Use cheerio to strip HTML tags
-        const $ = cheerio.load(descriptionHtml);
-        const text = $.text();
-
-        return text.trim() || null;
-    } catch (error) {
-        console.error(`Error scraping job description for ${jobId}:`, error);
-        return null;
-    }
-}

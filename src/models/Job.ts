@@ -9,6 +9,8 @@ export interface IJob extends Document {
     status: string;
     dateOpened: Date;
     description?: string;
+    descriptionManuallyUpdated?: boolean;
+    ratingEnabled?: boolean;
 }
 
 const JobSchema: Schema = new Schema({
@@ -20,6 +22,8 @@ const JobSchema: Schema = new Schema({
     status: { type: String },
     dateOpened: { type: Date },
     description: { type: String },
+    descriptionManuallyUpdated: { type: Boolean, default: false },
+    ratingEnabled: { type: Boolean, default: true },
 }, { timestamps: true });
 
 export default mongoose.model<IJob>('Job', JobSchema);
