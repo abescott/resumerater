@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import http from 'http';
+import { Server } from 'socket.io';
+import Redis from 'ioredis';
 import connectDB from './config/db';
 import Job from './models/Job';
 import Application from './models/Application';
@@ -11,6 +14,40 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+
+// Create HTTP Server & Socket.IO
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*", // Allow all origins for simplicity (or configure specific frontend URL)
+        methods: ["GET", "POST"]
+    }
+});
+
+// Redis Subscriber for Real-Time Events
+const redisUrl = process.env.REDIS_URL || process.env.VALKEY_URI || 'redis://localhost:6379';
+const redisSub = new Redis(redisUrl, {
+    tls: process.env.REDIS_URL?.includes('rediss://') ? { rejectUnauthorized: false } : undefined
+});
+
+redisSub.subscribe('channel:events', (err) => {
+    if (err) console.error('Failed to subscribe to Redis events:', err);
+    else console.log('✅ Subscribed to channel:events');
+});
+
+redisSub.on('message', (channel, message) => {
+    if (channel === 'channel:events') {
+        console.log('📡 Event received:', message);
+        io.emit('pipeline_update', JSON.parse(message));
+    }
+});
+
+io.on('connection', (socket) => {
+    console.log('Client connected:', socket.id);
+    socket.on('disconnect', () => {
+        console.log('Client disconnected:', socket.id);
+    });
+});
 
 // Middleware
 app.use(cors());
@@ -76,26 +113,22 @@ app.put('/api/jobs/:id', async (req, res) => {
     }
 });
 
-// Get applicants for a job
+// Get applicants for a job (Merged with Pipeline Status)
+// We need to fetch pipeline status from Postgres? 
+// Or just let the frontend join via WebSocket events?
+// Ideally, the initial load should include current status.
+// I'll add a lightweight query if needed, but for now, let's keep Mongo as source
+// and let Frontend fetch status or just start listening.
+// Actually, I should probably expose an endpoint to get statuses.
+// But for MVP, let's keep it simple.
+
 app.get('/api/jobs/:id/applicants', async (req, res) => {
     try {
-        // Find job first to get its bambooId if needed, 
-        // but Application model uses jobId which seems to be the bambooId based on schema?
-        // Let's check schema: Application.jobId type Number. Job.bambooId type Number.
-        // Assuming the link is via bambooId if using typical relational logic, 
-        // OR Application.jobId might be the MongoDB _id? 
-        // Let's look at Application.ts: "jobId: { type: Number, required: true, index: true }"
-        // This implies it links to Job.bambooId. 
-
-        // However, the route parameter :id might be the MongoDB Object ID from the frontend if we link via _id.
-        // Let's support both or check.
-
         const job = await Job.findById(req.params.id);
         if (!job) {
             return res.status(404).json({ message: 'Job not found' });
         }
 
-        // Find applications where jobId matches the job's bambooId
         const applications = await Application.find({ jobId: job.bambooId }).sort({ aiRating: -1 });
         res.json(applications);
     } catch (error) {
@@ -119,6 +152,6 @@ app.get('/api/applicants/:id', async (req, res) => {
 });
 
 // Start Server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });

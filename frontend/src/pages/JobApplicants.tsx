@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
 import type { Job, Application } from '../types';
+import { useRealTimeStatus } from '../hooks/useRealTimeStatus';
 
 type SortField = 'name' | 'rating' | 'status' | 'date';
 type SortDirection = 'asc' | 'desc';
@@ -13,6 +14,9 @@ const JobApplicants: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [sortField, setSortField] = useState<SortField>('rating');
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+    // Real-Time Status Hook
+    const statusMap = useRealTimeStatus();
 
     useEffect(() => {
         const fetchData = async () => {
@@ -53,15 +57,21 @@ const JobApplicants: React.FC = () => {
                     result = a.firstName.localeCompare(b.firstName);
                     break;
                 case 'rating':
-                    // Handle null/undefined ratings
+                    // Handle live updates or static
+                    const statusA = statusMap[a.bambooId];
+                    const statusB = statusMap[b.bambooId];
+
+                    // Simple logic: if live status exists and not COMPLETED, treat as 0 for sorting?
+                    // Or keep original rating.
                     const ratingA = a.aiRating || 0;
                     const ratingB = b.aiRating || 0;
                     result = ratingA - ratingB;
                     break;
                 case 'status':
-                    const statusA = a.status || '';
-                    const statusB = b.status || '';
-                    result = statusA.localeCompare(statusB);
+                    // Override with live status if available
+                    const liveStatusA = statusMap[a.bambooId]?.step || a.status || '';
+                    const liveStatusB = statusMap[b.bambooId]?.step || b.status || '';
+                    result = liveStatusA.localeCompare(liveStatusB);
                     break;
                 case 'date':
                     const dateA = new Date(a.dateApplied).getTime();
@@ -132,6 +142,9 @@ const JobApplicants: React.FC = () => {
                     </thead>
                     <tbody>
                         {sortedApplicants.map((app) => {
+                            // Real-Time Override
+                            const liveData = statusMap[app.bambooId];
+
                             // Handle legacy 1-10 scale if detected (rating > 5)
                             // otherwise assume 1-5 scale (native)
                             let ratingOutOf5 = app.aiRating || null;
@@ -168,20 +181,39 @@ const JobApplicants: React.FC = () => {
                                                 <span style={{ fontSize: '1.25rem' }}>{ratingOutOf5}</span>
                                                 <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 400 }}>/5</span>
                                             </div>
+                                        ) : liveData && liveData.step === 'RATE' && liveData.status === 'IN_PROGRESS' ? (
+                                            <span style={{ color: 'var(--accent-color)', fontStyle: 'italic', animation: 'pulse 1.5s infinite' }}>AI Analyzing...</span>
                                         ) : (
                                             <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>Pending</span>
                                         )}
                                     </td>
                                     <td style={{ padding: '1rem 1.5rem' }}>
-                                        <span style={{
-                                            background: 'rgba(255, 255, 255, 0.05)',
-                                            padding: '0.25rem 0.75rem',
-                                            borderRadius: '999px',
-                                            fontSize: '0.85rem',
-                                            color: 'var(--text-secondary)'
-                                        }}>
-                                            {app.status}
-                                        </span>
+                                        {liveData ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                                <span style={{
+                                                    background: liveData.status === 'ERROR' || liveData.status.includes('FAILED') ? 'rgba(239, 68, 68, 0.15)' : 'rgba(52, 211, 153, 0.1)',
+                                                    color: liveData.status === 'ERROR' || liveData.status.includes('FAILED') ? '#fca5a5' : '#6ee7b7',
+                                                    padding: '0.25rem 0.75rem',
+                                                    borderRadius: '999px',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 600,
+                                                    width: 'fit-content'
+                                                }}>
+                                                    {liveData.step}: {liveData.status}
+                                                </span>
+                                                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', opacity: 0.7 }}>Live Update</span>
+                                            </div>
+                                        ) : (
+                                            <span style={{
+                                                background: 'rgba(255, 255, 255, 0.05)',
+                                                padding: '0.25rem 0.75rem',
+                                                borderRadius: '999px',
+                                                fontSize: '0.85rem',
+                                                color: 'var(--text-secondary)'
+                                            }}>
+                                                {app.status}
+                                            </span>
+                                        )}
                                     </td>
                                     <td style={{ padding: '1rem 1.5rem', color: 'var(--text-secondary)' }}>
                                         {new Date(app.dateApplied).toLocaleDateString()}
@@ -200,6 +232,13 @@ const JobApplicants: React.FC = () => {
                     </tbody>
                 </table>
             </div>
+            <style>{`
+                @keyframes pulse {
+                    0% { opacity: 0.6; }
+                    50% { opacity: 1; }
+                    100% { opacity: 0.6; }
+                }
+            `}</style>
         </div>
     );
 };
