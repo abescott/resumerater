@@ -12,6 +12,7 @@ if (!redisUri) {
 
 // Create a generic Redis client
 const redis = new Redis(redisUri || 'redis://localhost:6379', {
+    tls: redisUri?.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
     maxRetriesPerRequest: 3,
     retryStrategy(times) {
         if (times > 3) {
